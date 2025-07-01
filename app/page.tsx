@@ -1,103 +1,175 @@
-import Image from "next/image";
+'use client'; // This is important for client-side components in the App Router
+
+import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import { createWorker } from 'tesseract.js';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [extractedText, setExtractedText] = useState<string>('');
+  const [progress, setProgress] = useState<number>(0);
+  const [progressLabel, setProgressLabel] = useState<string>('Idle');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // useRef to hold the actual File object
+  const imageFileRef = useRef<File | null>(null);
+
+  // Initialize Tesseract worker outside the component for better performance
+  // Or, initialize and terminate within the function if you only need it for a single use
+  // For this example, we'll create a new worker on each process to simplify state management
+  // For a more complex app, consider reusing a single worker.
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      imageFileRef.current = file; // Store the actual File object
+      setSelectedImage(URL.createObjectURL(file)); // For image preview
+      setExtractedText('');
+      setProgress(0);
+      setProgressLabel('Idle');
+      setError('');
+    }
+  };
+
+  const processImage = async () => {
+    if (!imageFileRef.current) {
+      setError('Please select an image first.');
+      return;
+    }
+
+    setLoading(true);
+    setExtractedText('');
+    setProgress(0);
+    setProgressLabel('Loading Tesseract core...');
+    setError('');
+
+    try {
+      const worker = await createWorker('eng', 1, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setProgress(Math.round(m.progress * 100));
+            setProgressLabel(`Recognizing text: ${Math.round(m.progress * 100)}%`);
+          } else if (m.status === 'loading tesseract core') {
+            setProgressLabel('Loading Tesseract core...');
+          } else if (m.status === 'initializing tesseract') {
+            setProgressLabel('Initializing Tesseract...');
+          } else if (m.status === 'loading language traineddata') {
+            setProgressLabel('Loading language data...');
+          }
+          console.log(m); // Log Tesseract.js progress
+        },
+      });
+
+      const { data: { text } } = await worker.recognize(imageFileRef.current);
+      setExtractedText(text);
+      setProgress(100);
+      setProgressLabel('Done!');
+
+      await worker.terminate(); // Important: terminate the worker to free up resources
+
+    } catch (err: any) {
+      console.error('OCR Error:', err);
+      setError(`Failed to extract text: ${err.message || 'An unknown error occurred.'}`);
+      setExtractedText(''); // Clear any previous text on error
+      setProgress(0);
+      setProgressLabel('Error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Clean up the object URL when the component unmounts or image changes
+  useEffect(() => {
+    return () => {
+      if (selectedImage) {
+        URL.revokeObjectURL(selectedImage);
+      }
+    };
+  }, [selectedImage]);
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 sm:p-6">
+      <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-800 mb-8 text-center leading-tight">
+        Image to Text Converter
+      </h1>
+
+      <div className="bg-white p-6 sm:p-10 rounded-xl shadow-2xl w-full max-w-3xl border border-gray-200">
+        <div className="mb-8">
+          <label htmlFor="image-upload" className="block text-lg font-semibold text-gray-700 mb-3 cursor-pointer">
+            <div className="flex items-center justify-center w-full px-5 py-3 border-2 border-dashed border-blue-400 rounded-lg text-blue-700 hover:bg-blue-50 transition duration-200 ease-in-out">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+              </svg>
+              Click to Upload Image or Drag & Drop
+            </div>
+          </label>
+          <input
+            id="image-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="hidden" // Hide the default input
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+
+        {selectedImage && (
+          <div className="mb-8 flex justify-center items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <Image
+              src={selectedImage}
+              alt="Selected Preview"
+              width={400}
+              height={400}
+              objectFit="contain" // Keep aspect ratio
+              className="max-h-96 w-auto rounded-md shadow-inner"
+            />
+          </div>
+        )}
+
+        <button
+          onClick={processImage}
+          disabled={!imageFileRef.current || loading}
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white py-4 px-6 rounded-lg font-bold text-xl
+                     hover:from-blue-700 hover:to-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:ring-offset-2 transition duration-300 ease-in-out
+                     disabled:opacity-60 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-600"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          {loading ? (
+            <div className="flex items-center justify-center">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {progressLabel} ({progress}%)
+            </div>
+          ) : 'Convert Image to Text'}
+        </button>
+
+        {error && (
+          <p className="mt-6 text-red-600 bg-red-50 p-4 rounded-md border border-red-200 text-center text-md font-medium">
+            {error}
+          </p>
+        )}
+
+        {extractedText && (
+          <div className="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-inner">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Extracted Text:</h2>
+            <textarea
+              readOnly
+              value={extractedText}
+              className="w-full h-64 p-4 text-gray-800 bg-white border border-gray-300 rounded-md
+                         focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              placeholder="Extracted text will appear here..."
+            />
+             <button
+              onClick={() => navigator.clipboard.writeText(extractedText)}
+              className="mt-4 w-full bg-green-600 text-white py-2 px-4 rounded-md font-semibold text-md
+                         hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            >
+              Copy Text
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
