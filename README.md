@@ -63,7 +63,7 @@ Follow these steps to get the project up and running on your local machine.
 
 ## 🌐 Live Demo
 
-[https://your-project-url.vercel.app](https://your-project-url.vercel.app)
+https://candid-macaron-2ce0ed.netlify.app/
 
 
 
