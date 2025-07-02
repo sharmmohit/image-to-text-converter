@@ -120,7 +120,8 @@ export default function Home() {
 
   // Main JSX structure for the page
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center font-sans">
+    // Outer container for the entire page, enabling sticky footer
+    <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <nav className="w-full h-16 flex items-center fixed top-0 z-10 bg-white border-b border-gray-200 shadow-md">
         <div className="container mx-auto flex justify-center items-center px-4">
@@ -135,9 +136,8 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Main content area - pushed down by navbar height */}
-      {/* mt-[80px] provides spacing for the fixed navbar, p-4 for general padding on smaller screens */}
-      <div className="mt-[80px] p-4 sm:p-6 w-full flex flex-col items-center">
+      {/* Main content area - takes up available space and pushes footer down */}
+      <div className="flex-grow flex flex-col items-center justify-center mt-[80px] p-4 sm:p-6 w-full">
         <div className="bg-white p-6 sm:p-10 rounded-xl shadow-2xl w-full max-w-3xl border border-gray-200">
           <div className="mb-8">
             <label htmlFor="image-upload" className="block text-lg font-semibold text-gray-700 mb-3 cursor-pointer">
@@ -224,6 +224,11 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* Footer Section */}
+      <footer className="w-full py-4 text-center text-gray-600 text-sm border-t border-gray-200 bg-white">
+        Made by Mohit Sharma 🫡
+      </footer>
     </div>
   );
 }
